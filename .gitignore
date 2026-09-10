@@ -1,3 +1,4 @@
 /assignment3testing-JAVA26/.vs
-/assignment3testing-JAVA26/assignment3testing/bin
+bin/
+coveragereport/
 jacoco.exec
