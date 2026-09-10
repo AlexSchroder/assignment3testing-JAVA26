@@ -23,6 +23,71 @@ public class PaymentTest {
         };
     }
 
+    // 1. Bugg: Max Value Subsidy (Över 56 år får över 2 miljarder kr istället för 0)
+    @Test
+    public void testBugOver56GetsZeroSubsidy() throws Exception {
+        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);
+        PaymentImpl payment = new PaymentImpl(cal);
+        // Född 1959 -> 57 år 2016
+        int amount = payment.getMonthlyAmount("19590510-1234", 0, 100, 100);
+        // Ska ge 0, men buggiga koden ger Integer.MAX_VALUE
+        assertEquals(0, amount);
+    }
+
+    // 2. Bugg: 20-åringar nekas bidrag (Off-by-one: > 20 istället för >= 20)
+    @Test
+    public void testBugExactly20YearsOldGetsSubsidy() throws Exception {
+        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);
+        PaymentImpl payment = new PaymentImpl(cal);
+        // Född 1996 -> exakt 20 år 2016
+        int amount = payment.getMonthlyAmount("19960510-1234", 0, 100, 100);
+        // Ska ge fullt lån (7088) + fullt bidrag (2816) = 9904. Buggiga koden ger 7088.
+        assertEquals(9904, amount);
+    }
+
+    // 3. Bugg: 47-åringar får lån (Off-by-one: <= 47 istället för < 47)
+    @Test
+    public void testBugExactly47YearsOldNoLoan() throws Exception {
+        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);
+        PaymentImpl payment = new PaymentImpl(cal);
+        // Född 1969 -> exakt 47 år 2016
+        int amount = payment.getMonthlyAmount("19690510-1234", 0, 100, 100);
+        // Ska endast ge bidrag (2816). Buggiga koden ger lån + bidrag (9904).
+        assertEquals(2816, amount);
+    }
+
+    // 4. Bugg: Deltidslånet är felstavat (4564 istället för 3564)
+    @Test
+    public void testBugHalfTimeLoanAmount() throws Exception {
+        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);
+        PaymentImpl payment = new PaymentImpl(cal);
+        int amount = payment.getMonthlyAmount("19910510-1234", 0, 50, 100);
+        // Ska ge halvt lån (3564) + halvt bidrag (1396) = 4960. Buggiga ger 5960.
+        assertEquals(4960, amount);
+    }
+
+    // 5. Bugg: Skottårshanteringen för februari är hårdkodad till 28 dagar
+    @Test
+    public void testBugLeapYearFebruary() throws Exception {
+        // Skottår 2016, sätter datumet till någon gång i februari
+        ICalendar cal = getMockCalendar(2016, Calendar.FEBRUARY, 15);
+        PaymentImpl payment = new PaymentImpl(cal);
+        String paymentDay = payment.getNextPaymentDay();
+        // Sista dagen i feb 2016 var måndag 29 februari -> "20160229"
+        assertEquals("20160229", paymentDay);
+    }
+
+    // 6. Bugg: Deltidsinkomst över gränsen ger ändå halvt bidrag
+    @Test
+    public void testBugPartTimeIncomeExceededYieldsZero() throws Exception {
+        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);
+        PaymentImpl payment = new PaymentImpl(cal);
+        // Inkomst (128723) är 1 kr över gränsen för deltid
+        int amount = payment.getMonthlyAmount("19910510-1234", 128723, 75, 100);
+        // Rätt kod ger 0. Buggig kod ger 1396.
+        assertEquals(0, amount);
+    }
+
     /**
      * Tests error handling: Passing a null personId should trigger 
      * an IllegalArgumentException. The (expected = ...) attribute tells JUnit 

@@ -23,6 +23,71 @@ import java.util.Date;
         };
     }
 
+    // 1. Bugg: Max Value Subsidy (Över 56 år får över 2 miljarder kr istället för 0)
+    @Test
+    public void testBugOver56GetsZeroSubsidy() throws Exception {
+<span class="fc" id="L29">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L30">        PaymentImpl payment = new PaymentImpl(cal);</span>
+        // Född 1959 -&gt; 57 år 2016
+<span class="fc" id="L32">        int amount = payment.getMonthlyAmount(&quot;19590510-1234&quot;, 0, 100, 100);</span>
+        // Ska ge 0, men buggiga koden ger Integer.MAX_VALUE
+<span class="fc" id="L34">        assertEquals(0, amount);</span>
+<span class="fc" id="L35">    }</span>
+
+    // 2. Bugg: 20-åringar nekas bidrag (Off-by-one: &gt; 20 istället för &gt;= 20)
+    @Test
+    public void testBugExactly20YearsOldGetsSubsidy() throws Exception {
+<span class="fc" id="L40">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L41">        PaymentImpl payment = new PaymentImpl(cal);</span>
+        // Född 1996 -&gt; exakt 20 år 2016
+<span class="fc" id="L43">        int amount = payment.getMonthlyAmount(&quot;19960510-1234&quot;, 0, 100, 100);</span>
+        // Ska ge fullt lån (7088) + fullt bidrag (2816) = 9904. Buggiga koden ger 7088.
+<span class="fc" id="L45">        assertEquals(9904, amount);</span>
+<span class="fc" id="L46">    }</span>
+
+    // 3. Bugg: 47-åringar får lån (Off-by-one: &lt;= 47 istället för &lt; 47)
+    @Test
+    public void testBugExactly47YearsOldNoLoan() throws Exception {
+<span class="fc" id="L51">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L52">        PaymentImpl payment = new PaymentImpl(cal);</span>
+        // Född 1969 -&gt; exakt 47 år 2016
+<span class="fc" id="L54">        int amount = payment.getMonthlyAmount(&quot;19690510-1234&quot;, 0, 100, 100);</span>
+        // Ska endast ge bidrag (2816). Buggiga koden ger lån + bidrag (9904).
+<span class="fc" id="L56">        assertEquals(2816, amount);</span>
+<span class="fc" id="L57">    }</span>
+
+    // 4. Bugg: Deltidslånet är felstavat (4564 istället för 3564)
+    @Test
+    public void testBugHalfTimeLoanAmount() throws Exception {
+<span class="fc" id="L62">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L63">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L64">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 0, 50, 100);</span>
+        // Ska ge halvt lån (3564) + halvt bidrag (1396) = 4960. Buggiga ger 5960.
+<span class="fc" id="L66">        assertEquals(4960, amount);</span>
+<span class="fc" id="L67">    }</span>
+
+    // 5. Bugg: Skottårshanteringen för februari är hårdkodad till 28 dagar
+    @Test
+    public void testBugLeapYearFebruary() throws Exception {
+        // Skottår 2016, sätter datumet till någon gång i februari
+<span class="fc" id="L73">        ICalendar cal = getMockCalendar(2016, Calendar.FEBRUARY, 15);</span>
+<span class="fc" id="L74">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L75">        String paymentDay = payment.getNextPaymentDay();</span>
+        // Sista dagen i feb 2016 var måndag 29 februari -&gt; &quot;20160229&quot;
+<span class="fc" id="L77">        assertEquals(&quot;20160229&quot;, paymentDay);</span>
+<span class="fc" id="L78">    }</span>
+
+    // 6. Bugg: Deltidsinkomst över gränsen ger ändå halvt bidrag
+    @Test
+    public void testBugPartTimeIncomeExceededYieldsZero() throws Exception {
+<span class="fc" id="L83">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L84">        PaymentImpl payment = new PaymentImpl(cal);</span>
+        // Inkomst (128723) är 1 kr över gränsen för deltid
+<span class="fc" id="L86">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 128723, 75, 100);</span>
+        // Rätt kod ger 0. Buggig kod ger 1396.
+<span class="fc" id="L88">        assertEquals(0, amount);</span>
+<span class="fc" id="L89">    }</span>
+
     /**
      * Tests error handling: Passing a null personId should trigger 
      * an IllegalArgumentException. The (expected = ...) attribute tells JUnit 
@@ -30,10 +95,10 @@ import java.util.Date;
      */
     @Test(expected = IllegalArgumentException.class)
     public void testNullPersonIdThrowsException() throws Exception {
-<span class="fc" id="L33">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L34">        PaymentImpl payment = new PaymentImpl(cal);</span>
-<span class="nc" id="L35">        payment.getMonthlyAmount(null, 0, 100, 100);</span>
-<span class="nc" id="L36">    }</span>
+<span class="fc" id="L98">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L99">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="nc" id="L100">        payment.getMonthlyAmount(null, 0, 100, 100);</span>
+<span class="nc" id="L101">    }</span>
 
     /**
      * Tests error handling: Person ID must be 13 characters (yyyymmdd-nnnn). 
@@ -41,10 +106,10 @@ import java.util.Date;
      */
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidPersonIdLengthThrowsException() throws Exception {
-<span class="fc" id="L44">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L45">        PaymentImpl payment = new PaymentImpl(cal);</span>
-<span class="nc" id="L46">        payment.getMonthlyAmount(&quot;19910510&quot;, 0, 100, 100);</span>
-<span class="nc" id="L47">    }</span>
+<span class="fc" id="L109">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L110">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="nc" id="L111">        payment.getMonthlyAmount(&quot;19910510&quot;, 0, 100, 100);</span>
+<span class="nc" id="L112">    }</span>
 
     /**
      * Tests error handling: Income cannot be negative. 
@@ -52,10 +117,10 @@ import java.util.Date;
      */
     @Test(expected = IllegalArgumentException.class)
     public void testNegativeIncomeThrowsException() throws Exception {
-<span class="fc" id="L55">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L56">        PaymentImpl payment = new PaymentImpl(cal);</span>
-<span class="nc" id="L57">        payment.getMonthlyAmount(&quot;19910510-1234&quot;, -1, 100, 100);</span>
-<span class="nc" id="L58">    }</span>
+<span class="fc" id="L120">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L121">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="nc" id="L122">        payment.getMonthlyAmount(&quot;19910510-1234&quot;, -1, 100, 100);</span>
+<span class="nc" id="L123">    }</span>
 
     /**
      * Business Rule Test: Age requirement (&lt; 20).
@@ -64,12 +129,12 @@ import java.util.Date;
      */
     @Test
     public void testUnderAgeLoanAndSubsidyIsZero() throws Exception {
-<span class="fc" id="L67">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L68">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L132">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L133">        PaymentImpl payment = new PaymentImpl(cal);</span>
         // 1997 birth year -&gt; Age 19 in 2016
-<span class="fc" id="L70">        int amount = payment.getMonthlyAmount(&quot;19970510-0000&quot;, 0, 100, 100);</span>
-<span class="fc" id="L71">        assertEquals(0, amount);</span>
-<span class="fc" id="L72">    }</span>
+<span class="fc" id="L135">        int amount = payment.getMonthlyAmount(&quot;19970510-0000&quot;, 0, 100, 100);</span>
+<span class="fc" id="L136">        assertEquals(0, amount);</span>
+<span class="fc" id="L137">    }</span>
 
     /**
      * Business Rule Test: Standard full-time student payments.
@@ -78,11 +143,11 @@ import java.util.Date;
      */
     @Test
     public void testFullTimeValidStudentStandardAmounts() throws Exception {
-<span class="fc" id="L81">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L82">        PaymentImpl payment = new PaymentImpl(cal);</span>
-<span class="fc" id="L83">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 0, 100, 100);</span>
-<span class="fc" id="L84">        assertEquals(9904, amount);</span>
-<span class="fc" id="L85">    }</span>
+<span class="fc" id="L146">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L147">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L148">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 0, 100, 100);</span>
+<span class="fc" id="L149">        assertEquals(9904, amount);</span>
+<span class="fc" id="L150">    }</span>
 
     /**
      * Business Rule Test: Part-time studies (75% pace).
@@ -90,11 +155,11 @@ import java.util.Date;
      */
     @Test
     public void testPartTimeValidStudentAmounts() throws Exception {
-<span class="fc" id="L93">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L94">        PaymentImpl payment = new PaymentImpl(cal);</span>
-<span class="fc" id="L95">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 0, 75, 100);</span>
-<span class="fc" id="L96">        assertEquals(4960, amount);</span>
-<span class="fc" id="L97">    }</span>
+<span class="fc" id="L158">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L159">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L160">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 0, 75, 100);</span>
+<span class="fc" id="L161">        assertEquals(4960, amount);</span>
+<span class="fc" id="L162">    }</span>
 
     /**
      * Business Rule Test: Loan age cutoff limit.
@@ -103,12 +168,12 @@ import java.util.Date;
      */
     @Test
     public void testLoanAgeLimitExceeded() throws Exception {
-<span class="fc" id="L106">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L107">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L171">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L172">        PaymentImpl payment = new PaymentImpl(cal);</span>
         // 1969 birth year -&gt; Age 47 in 2016
-<span class="fc" id="L109">        int amount = payment.getMonthlyAmount(&quot;19690510-1234&quot;, 0, 100, 100);</span>
-<span class="fc" id="L110">        assertEquals(2816, amount);</span>
-<span class="fc" id="L111">    }</span>
+<span class="fc" id="L174">        int amount = payment.getMonthlyAmount(&quot;19690510-1234&quot;, 0, 100, 100);</span>
+<span class="fc" id="L175">        assertEquals(2816, amount);</span>
+<span class="fc" id="L176">    }</span>
 
     /**
      * Business Rule Test: Subsidy age cutoff limit.
@@ -117,12 +182,12 @@ import java.util.Date;
      */
     @Test
     public void testSubsidyAgeLimitExceeded() throws Exception {
-<span class="fc" id="L120">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L121">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L185">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L186">        PaymentImpl payment = new PaymentImpl(cal);</span>
         // 1959 birth year -&gt; Age 57 in 2016
-<span class="fc" id="L123">        int amount = payment.getMonthlyAmount(&quot;19590510-1234&quot;, 0, 100, 100);</span>
-<span class="fc" id="L124">        assertEquals(0, amount);</span>
-<span class="fc" id="L125">    }</span>
+<span class="fc" id="L188">        int amount = payment.getMonthlyAmount(&quot;19590510-1234&quot;, 0, 100, 100);</span>
+<span class="fc" id="L189">        assertEquals(0, amount);</span>
+<span class="fc" id="L190">    }</span>
 
     /**
      * Business Rule Test: Income threshold limit.
@@ -130,11 +195,11 @@ import java.util.Date;
      */
     @Test
     public void testFullTimeIncomeLimitExceeded() throws Exception {
-<span class="fc" id="L133">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L134">        PaymentImpl payment = new PaymentImpl(cal);</span>
-<span class="fc" id="L135">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 90000, 100, 100);</span>
-<span class="fc" id="L136">        assertEquals(0, amount);</span>
-<span class="fc" id="L137">    }</span>
+<span class="fc" id="L198">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L199">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L200">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 90000, 100, 100);</span>
+<span class="fc" id="L201">        assertEquals(0, amount);</span>
+<span class="fc" id="L202">    }</span>
 
     /**
      * Business Rule Test: Study completion ratio requirement.
@@ -142,11 +207,11 @@ import java.util.Date;
      */
     @Test
     public void testLowCompletionRatioResultsInZero() throws Exception {
-<span class="fc" id="L145">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L146">        PaymentImpl payment = new PaymentImpl(cal);</span>
-<span class="fc" id="L147">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 0, 100, 40);</span>
-<span class="fc" id="L148">        assertEquals(0, amount);</span>
-<span class="fc" id="L149">    }</span>
+<span class="fc" id="L210">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L211">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L212">        int amount = payment.getMonthlyAmount(&quot;19910510-1234&quot;, 0, 100, 40);</span>
+<span class="fc" id="L213">        assertEquals(0, amount);</span>
+<span class="fc" id="L214">    }</span>
 
     /**
      * Utility Test: Verifies that `getNextPaymentDay()` successfully calculates 
@@ -154,11 +219,11 @@ import java.util.Date;
      */
     @Test
     public void testGetNextPaymentDayFormat() throws Exception {
-<span class="fc" id="L157">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
-<span class="fc" id="L158">        PaymentImpl payment = new PaymentImpl(cal);</span>
-<span class="fc" id="L159">        String paymentDay = payment.getNextPaymentDay();</span>
-<span class="fc" id="L160">        assertNotNull(paymentDay);</span>
-<span class="fc" id="L161">        assertEquals(8, paymentDay.length());</span>
-<span class="fc" id="L162">    }</span>
+<span class="fc" id="L222">        ICalendar cal = getMockCalendar(2016, Calendar.MAY, 10);</span>
+<span class="fc" id="L223">        PaymentImpl payment = new PaymentImpl(cal);</span>
+<span class="fc" id="L224">        String paymentDay = payment.getNextPaymentDay();</span>
+<span class="fc" id="L225">        assertNotNull(paymentDay);</span>
+<span class="fc" id="L226">        assertEquals(8, paymentDay.length());</span>
+<span class="fc" id="L227">    }</span>
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>
